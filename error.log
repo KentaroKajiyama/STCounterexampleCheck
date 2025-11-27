@@ -1,0 +1,16 @@
+Testing Core Logic...
+1. Constraints
+ERROR: LoadError: UndefVarError: `issimple` not defined in `STCounterexampleCheck.GraphUtils`
+Suggestion: check for spelling errors or missing imports.
+Stacktrace:
+ [1] check_graph_constraints(g::SimpleGraph{Int64}, max_edges::Int64, min_deg::Int64, max_deg::Int64)
+   @ STCounterexampleCheck.GraphUtils C:\Users\jesus\OneDrive\Documents\VScode\Repositories\research\STCounterexampleCheck\src\GraphUtils.jl:69
+ [2] top-level scope
+   @ C:\Users\jesus\OneDrive\Documents\VScode\Repositories\research\STCounterexampleCheck\test_core.jl:12
+ [3] include(mod::Module, _path::String)
+   @ Base .\Base.jl:306
+ [4] exec_options(opts::Base.JLOptions)
+   @ Base .\client.jl:317
+ [5] _start()
+   @ Base .\client.jl:550
+in expression starting at C:\Users\jesus\OneDrive\Documents\VScode\Repositories\research\STCounterexampleCheck\test_core.jl:12
