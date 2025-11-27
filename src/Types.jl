@@ -1,17 +1,24 @@
 module Types
 
-export STV, STM, Embedding
+export STV, STM, Embedding, get_Fp, P_VAL
 
-using LinearAlgebra
+using Nemo
 
-# Symmetric Tensor Vector (represented as a vector of length t(t+1)/2)
-const STV = Vector{Int}
+# 定数定義
+const P_VAL = 2147483647
 
-# Symmetric Tensor Matrix
-const STM = Matrix{Int}
+# Nemo の GF(p) オブジェクトを取得する関数
+# グローバル定数にするとプレコンパイル時にポインタが無効になる可能性があるため関数化
+get_Fp() = GF(P_VAL)
 
-# Embedding of graph vertices into Z_p^t
-# n x t matrix where n is number of vertices
+# 型定義
+# STM (Symmetric Tensor Matrix)
+const STM = Union{FpMatrix, FqMatrix}
+
+# Embedding
 const Embedding = Matrix{Int}
+
+# STV
+const STV = Vector{Int}
 
 end
