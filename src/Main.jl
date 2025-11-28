@@ -12,13 +12,23 @@ using ..Algebra
 using ..Matroid
 using ..ClassCheck
 using ..Output
+using DotEnv
 
 # Constants/Configuration
 const T_DIM = 6
 const P_PRIME = 2147483647
 const MAX_EDGES = (T_DIM * (T_DIM + 1)) ÷ 2
-const MIN_DEG = parse(Int, get(ENV, "MIN_DEG", "0"))
-const MAX_DEG = parse(Int, get(ENV, "MAX_DEG", "1000"))
+
+function __init__()
+  # Load environment variables from .env file at runtime
+  cfg = DotEnv.config()
+  for (k, v) in cfg
+    ENV[k] = v
+  end
+end
+
+get_min_deg() = parse(Int, get(ENV, "MIN_DEG", "0"))
+get_max_deg() = parse(Int, get(ENV, "MAX_DEG", "1000"))
 
 """
     core_main(g::AbstractGraph, channel::Channel)
@@ -26,7 +36,7 @@ const MAX_DEG = parse(Int, get(ENV, "MAX_DEG", "1000"))
 Main logic for a single graph. Pushes results to channel.
 """
 function core_main(g::AbstractGraph, channel::Channel)
-  valid, reason = check_graph_constraints(g, MAX_EDGES, MIN_DEG, MAX_DEG)
+  valid, reason = check_graph_constraints(g, MAX_EDGES, get_min_deg(), get_max_deg())
   if !valid
     output_exception(channel, g, reason)
     return

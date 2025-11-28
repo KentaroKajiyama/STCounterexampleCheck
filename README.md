@@ -42,7 +42,7 @@ This directory contains the core source code of the package.
     - **日本語**: 有限体 $\mathbb{Z}_p$ ($p=2^{31}-1$) 上の代数計算を実装します。
         - `generate_embedding`: ランダムな埋め込み行列を生成します。
         - `generate_matrix`: グラフと埋め込みから対称テンソル行列 (STM) を構築します。
-        - `compute_rank`: ガウスの消去法を用いて行列のランクを計算します。
+        - `compute_rank`: 行列のランクを有限体上で計算します。
 
 - **`Matroid.jl`**
     - **English**: Handles matroid-theoretic operations.

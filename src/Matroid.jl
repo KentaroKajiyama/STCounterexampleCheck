@@ -5,144 +5,117 @@ export find_circuit, find_closure
 using ..Types
 using ..Algebra
 using Graphs
+using Nemo
 
 """
     find_circuit(g::AbstractGraph, M::STM, phi::Vector{Edge})
 
-Finds a circuit in the matroid defined by M.
-Returns the list of edges forming the circuit.
+行列 M (列が phi に対応) で定義されるマトロイド上のサーキットを検出します。
+アルゴリズム:
+1. 辺を1つずつ追加し、独立集合 B を構築する。
+2. ランクが増加しなくなった瞬間(従属)、B は「ただ1つのサーキット」を含む。
+3. B の各要素 f について、B \\ {f} のランクを計算する。
+   - rank(B \\ {f}) == rank(B) ならば、f はサーキットの一部である (除去してもランクが下がらない = 他の要素で張れる)。
+   - rank(B \\ {f}) < rank(B) ならば、f はサーキット外の要素である。
+
+Returns:
+    (circuit_edges::Vector{Edge}, circuit_indices::Vector{Int})
 """
 function find_circuit(g::AbstractGraph, M::STM, phi::Vector{Edge})
-  # M has columns corresponding to phi
-  # We iterate through edges and build B
-
-  B_indices = Int[] # Indices of columns in M
-
-  for (k, e) in enumerate(phi)
-    push!(B_indices, k)
-
-    # Check independence
-    subM = M[:, B_indices]
-    r = compute_rank(subM)
-
-    if r < length(B_indices)
-      # Found dependency
-      # B_indices contains a circuit
-      # Find the minimal dependent set C within B_indices
-      C_indices = Int[]
-
-      # A subset is a circuit if it is dependent and every proper subset is independent.
-      # We know B_indices is dependent.
-      # We can identify C by checking each element f in B_indices.
-      # If B_indices \ {f} is independent, then f MUST be in the circuit.
-      # If B_indices \ {f} is dependent, then f is NOT needed for the dependency (redundant for this specific circuit, or there's another circuit).
-      # Wait, if B_indices \ {f} is dependent, it means there is a circuit inside B_indices \ {f}.
-      # But we stopped at the FIRST dependency.
-      # So B_indices has exactly one dependency relation (rank = size - 1).
-      # In this case, B_indices IS the circuit?
-      # Not necessarily. We might have added an edge that completed a circuit, but there were other independent edges added before that are not part of the circuit.
-      # Example: {e1, e2} independent. Add e3. {e2, e3} is circuit. {e1, e2, e3} dependent.
-      # Removing e1 -> {e2, e3} dependent. So e1 is not in circuit.
-      # Removing e2 -> {e1, e3} independent. So e2 is in circuit.
-      # Removing e3 -> {e1, e2} independent. So e3 is in circuit.
-
-      # So the logic is: f is in C iff rank(B \ {f}) == rank(B).
-      # Wait.
-      # If B is dependent with corank 1 (which it is, because we stopped immediately),
-      # then rank(B) = |B| - 1.
-      # If we remove f:
-      # Case 1: f in C. Then B \ {f} breaks the unique circuit. So B \ {f} is independent.
-      #         rank(B \ {f}) = |B| - 1 = rank(B).
-      # Case 2: f not in C. Then B \ {f} still contains C. So B \ {f} is dependent.
-      #         rank(B \ {f}) = |B| - 2 (if f was independent of the rest? No)
-      #         Actually, if f is not in C, and B has only one circuit C,
-      #         then f is effectively "independent" relative to C?
-      #         rank(B \ {f}) = rank(B) - 1? No.
-      #         Let's trace: B = {e1, e2, e3}, C={e2, e3}. e1 independent of C.
-      #         rank(B) = 2. |B|=3.
-      #         Remove e1: {e2, e3}. rank=1. |B|-1 = 2. rank < size. Dependent.
-      #         rank(B \ {e1}) = 1. rank(B) = 2. So rank decreases.
-      #         Remove e2: {e1, e3}. Independent. rank=2.
-      #         rank(B \ {e2}) = 2. rank(B) = 2. Rank stays same.
-
-      # So: f in C iff rank(B \ {f}) == rank(B).
-      # Wait, in the example:
-      # e2 in C. rank(B \ {e2}) = 2. rank(B) = 2. Match.
-      # e1 not in C. rank(B \ {e1}) = 1. rank(B) = 2. Mismatch.
-
-      # Correct logic:
-      # C = { f in B | rank(B \ {f}) == rank(B) }
-      # Wait, is this universally true for matroids?
-      # For a set B with a unique circuit C:
-      # cl(B \ {f}) = cl(B) iff f in cl(B \ {f}).
-      # If f in C, then f is spanned by C \ {f}. So f in cl(B \ {f}).
-      # So rank(B \ {f}) = rank(B).
-      # If f not in C, then f is NOT spanned by B \ {f} (since C is the ONLY dependency).
-      # So rank(B \ {f}) = rank(B) - 1.
-
-      # Yes, this holds.
-
-      current_rank = r
-      for f_idx in B_indices
-        # Construct B \ {f}
-        subset_indices = filter(x -> x != f_idx, B_indices)
-        subM_f = M[:, subset_indices]
-        r_f = compute_rank(subM_f)
-
-        if r_f == current_rank
-          push!(C_indices, f_idx)
+    # M の列は phi の辺に対応しています
+    
+    B_indices = Int[] # 現在の基底候補 (列インデックス)
+    
+    # ランク計算用のキャッシュとして、現在までのランクを保持しても良いが
+    # Nemoのrankは高速なので、都度サブセットで計算する
+    
+    for (k, e) in enumerate(phi)
+        push!(B_indices, k)
+        
+        # 部分行列の作成: M[:, B_indices]
+        # Nemo/AbstractAlgebra ではベクトルによるインデックス指定で新しい行列が生成される
+        subM = M[:, B_indices]
+        r = compute_rank(subM)
+        
+        # 従属判定: ランク < 列数
+        if r < length(B_indices)
+            # 従属集合を発見した (この時点で B_indices は唯一のサーキットを含む集合)
+            # この B_indices の中から、極小従属集合 (サーキット) C を特定する
+            
+            C_indices = Int[]
+            current_rank = r
+            
+            for f_idx in B_indices
+                # f を除いた集合 B \ {f} を作成
+                subset_indices = filter(x -> x != f_idx, B_indices)
+                
+                # サブセットのランク計算
+                # 行列生成コストを抑えるため、本来はランクの更新式などが使えるが、
+                # サイズが小さい(最大22程度)ため都度生成で十分高速
+                subM_f = M[:, subset_indices]
+                r_f = compute_rank(subM_f)
+                
+                # 判定ロジック:
+                # f がサーキットに含まれる <=> B \ {f} のランクが B のランクと同じ
+                # (f が他の要素の線形結合で表せるため、除いても張る空間が変わらない)
+                if r_f == current_rank
+                    push!(C_indices, f_idx)
+                end
+            end
+            
+            # 辞書順ルールに基づき、インデックスは昇順になっているはずだが、
+            # 念のためソートしておく (filter順なので通常は昇順)
+            sort!(C_indices)
+            
+            return phi[C_indices], C_indices
         end
-      end
-
-      return phi[C_indices], C_indices
     end
-  end
 
-  return Edge[], Int[]
+    # 独立 (最後までサーキットが見つからなかった場合)
+    return Edge[], Int[]
 end
 
 """
     find_closure(g::AbstractGraph, M::STM, C_indices::Vector{Int}, phi::Vector{Edge})
 
-Finds the closure of the circuit C.
-Returns the list of edges in the closure.
+サーキット C の閉包 (Closure) を生成します。
+定義: cl(C) = { e in E | rank(C U {e}) == rank(C) }
+つまり、C の要素によって張られる空間に含まれるすべての辺を列挙します。
+
+Returns:
+    (closure_edges::Vector{Edge}, closure_indices::Vector{Int})
 """
 function find_closure(g::AbstractGraph, M::STM, C_indices::Vector{Int}, phi::Vector{Edge})
-  # F starts as C
-  F_indices = copy(C_indices)
-
-  # Calculate rank of C (should be |C| - 1)
-  subM_C = M[:, C_indices]
-  rank_C = compute_rank(subM_C)
-
-  # Iterate over all edges in G (or just G \ C, but checking C again is harmless/fast enough or we can skip)
-  # The prompt says G <- G - C initially.
-
-  # We check every edge e. If rank(C + e) == rank(C), then e is in closure.
-  # Note: We should check against the CURRENT F or just C?
-  # Closure of C, cl(C), is the set of all x such that rank(C + x) = rank(C).
-  # This is the definition.
-  # So we just compare against C.
-
-  all_indices = 1:length(phi)
-  remaining_indices = setdiff(all_indices, C_indices)
-
-  for idx in remaining_indices
-    # Check rank(C U {e})
-    # We can optimize by just appending the column to the matrix of C
-    # But compute_rank takes a matrix.
-
-    # Construct matrix for C + e
-    test_indices = [C_indices; idx]
-    subM_test = M[:, test_indices]
-    r_test = compute_rank(subM_test)
-
-    if r_test == rank_C
-      push!(F_indices, idx)
+    # F (閉包) の初期値は C
+    F_indices = copy(C_indices)
+    
+    # C のランクを計算
+    subM_C = M[:, C_indices]
+    rank_C = compute_rank(subM_C)
+    
+    # G の全エッジに対して判定 (定義上、G \ C だけでなく C 内もチェックしてよいが、
+    # 効率のため C に含まれないものだけをチェックする)
+    
+    all_indices = 1:length(phi)
+    remaining_indices = setdiff(all_indices, C_indices)
+    
+    for idx in remaining_indices
+        # テスト用部分行列: C の列 + 新しい辺 e の列
+        # これにより rank(C U {e}) を計算
+        
+        test_indices = [C_indices; idx]
+        subM_test = M[:, test_indices]
+        r_test = compute_rank(subM_test)
+        
+        # ランクが変わらなければ、idx は閉包に含まれる
+        if r_test == rank_C
+            push!(F_indices, idx)
+        end
     end
-  end
-
-  return phi[F_indices], F_indices
+    
+    sort!(F_indices)
+    
+    return phi[F_indices], F_indices
 end
 
 end

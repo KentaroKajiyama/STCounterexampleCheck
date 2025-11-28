@@ -66,6 +66,11 @@ function is_in_C(g::AbstractGraph, n::Int, t::Int)
     end
   end
 
+  # Check for Complete Graph explicitly
+  if ne(g) == n * (n - 1) ÷ 2
+      return true
+  end
+
   return false
 end
 
@@ -73,11 +78,33 @@ end
     identify_C_n6_index(g::AbstractGraph, n::Int)
 
 Identifies the index of g in the specific C_{n,6} list.
-Returns index (1-13) or 0 if not found.
+Returns index (1-14) or 0 if not found.
+
+Indices:
+1: K_n (Complete Graph)
+2: K_n_bar
+3: K1 + K_{n-1}_bar
+4: K2 + K_{n-2}_bar
+5: K3 + K_{n-3}_bar
+6: K4 + K_{n-4}_bar
+7: K5 + K_{n-5}_bar
+8: K3,5 U K_{n-8}_bar
+9: K4,4 U K_{n-8}_bar
+10: K4,5 U K_{n-9}_bar
+11: K5,5 U K_{n-10}_bar
+12: K1 + (K3,4 U K_{n-8}_bar)
+13: K1 + (K4,4 U K_{n-9}_bar)
+14: K2 + (K3,3 U K_{n-8}_bar)
 """
 function identify_C_n6_index(g::AbstractGraph, n::Int)
-  if ne(g) == 0
+  # 1. Complete Graph (K_n)
+  if ne(g) == n * (n - 1) ÷ 2
     return 1
+  end
+
+  # 2. Empty Graph (K_n_bar)
+  if ne(g) == 0
+    return 2
   end
 
   function check_Kab_union_Kbar(graph, total_n, a, b)
@@ -114,43 +141,46 @@ function identify_C_n6_index(g::AbstractGraph, n::Int)
     return check_H_func(subg)
   end
 
+  # 3-7: K_k + K_bar (shifted from 2-6)
   if check_join(g, 1, h -> ne(h) == 0)
-    return 2
-  end
-  if check_join(g, 2, h -> ne(h) == 0)
     return 3
   end
-  if check_join(g, 3, h -> ne(h) == 0)
+  if check_join(g, 2, h -> ne(h) == 0)
     return 4
   end
-  if check_join(g, 4, h -> ne(h) == 0)
+  if check_join(g, 3, h -> ne(h) == 0)
     return 5
   end
-  if check_join(g, 5, h -> ne(h) == 0)
+  if check_join(g, 4, h -> ne(h) == 0)
     return 6
   end
-
-  if check_Kab_union_Kbar(g, n, 3, 5)
+  if check_join(g, 5, h -> ne(h) == 0)
     return 7
   end
-  if check_Kab_union_Kbar(g, n, 4, 4)
+
+  # 8-11: Bipartite Union (shifted from 7-10)
+  if check_Kab_union_Kbar(g, n, 3, 5)
     return 8
   end
-  if check_Kab_union_Kbar(g, n, 4, 5)
+  if check_Kab_union_Kbar(g, n, 4, 4)
     return 9
   end
-  if check_Kab_union_Kbar(g, n, 5, 5)
+  if check_Kab_union_Kbar(g, n, 4, 5)
     return 10
   end
-
-  if check_join(g, 1, h -> check_Kab_union_Kbar(h, n - 1, 3, 4))
+  if check_Kab_union_Kbar(g, n, 5, 5)
     return 11
   end
-  if check_join(g, 1, h -> check_Kab_union_Kbar(h, n - 1, 4, 4))
+
+  # 12-14: Recursive Join (shifted from 11-13)
+  if check_join(g, 1, h -> check_Kab_union_Kbar(h, n - 1, 3, 4))
     return 12
   end
-  if check_join(g, 2, h -> check_Kab_union_Kbar(h, n - 2, 3, 3))
+  if check_join(g, 1, h -> check_Kab_union_Kbar(h, n - 1, 4, 4))
     return 13
+  end
+  if check_join(g, 2, h -> check_Kab_union_Kbar(h, n - 2, 3, 3))
+    return 14
   end
 
   return 0

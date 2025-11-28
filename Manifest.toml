@@ -2,7 +2,7 @@
 
 julia_version = "1.12.2"
 manifest_format = "2.0"
-project_hash = "24d45c47558a80197ba415fe87155e23bbc64123"
+project_hash = "739e84709cb2b345b9bd58159696688616cf9fe8"
 
 [[deps.AbstractAlgebra]]
 deps = ["LinearAlgebra", "MacroTools", "Preferences", "Random", "RandomExtensions", "SparseArrays"]
@@ -67,6 +67,12 @@ version = "1.9.1"
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 version = "1.11.0"
+
+[[deps.DotEnv]]
+deps = ["PrecompileTools"]
+git-tree-sha1 = "92e88cb68a5b10545234f46dfaeb2fa8a8a50c45"
+uuid = "4dc1fcf4-5e3b-5448-94ab-0c38ec0385c1"
+version = "1.0.0"
 
 [[deps.FLINT_jll]]
 deps = ["Artifacts", "GMP_jll", "JLLWrappers", "Libdl", "MPFR_jll", "OpenBLAS32_jll"]
@@ -244,7 +250,7 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
 
 [[deps.STCounterexampleCheck]]
-deps = ["ArgParse", "Combinatorics", "GraphIO", "Graphs", "JSON", "LinearAlgebra", "MsgPack", "Primes", "Random"]
+deps = ["ArgParse", "Combinatorics", "GraphIO", "Graphs", "JSON", "LinearAlgebra", "MsgPack", "Nemo", "Primes", "Random"]
 path = "."
 uuid = "a41c45f5-48fd-409d-8b15-c5ffb6594edb"
 version = "0.1.0"
