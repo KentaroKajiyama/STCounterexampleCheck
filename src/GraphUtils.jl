@@ -4,6 +4,7 @@ export read_graphs_from_file, check_graph_constraints, to_graph6
 
 using Graphs
 using GraphIO
+using GraphIO.Graph6
 
 """
     read_graphs_from_file(path::String)
