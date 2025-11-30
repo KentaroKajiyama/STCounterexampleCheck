@@ -1,6 +1,6 @@
 module ClassCheck
 
-export is_in_C, identify_C_n6_index
+export is_in_C, identify_C_n6_index, identify_C_n5_index
 
 using Graphs
 using ..Types

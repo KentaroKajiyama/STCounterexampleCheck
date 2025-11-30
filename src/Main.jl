@@ -153,8 +153,15 @@ function double_circuit_main(g::AbstractGraph, channel::Channel)
     end
     
     if is_double_circuit
+        F_indices = find_closure(g, M_all, indices_g)
+
+        F_edges = phi_all[F_indices]
+        F_graph = SimpleGraph(n)
+        for e in F_edges
+          add_edge!(F_graph, src(e), dst(e))
+        end
         # (iv) Isomorphism Check with C_{n,5}
-        idx = identify_C_n5_index(g, n)
+        idx = identify_C_n5_index(F_graph, n)
         
         if idx > 0
             output_double_circuit(channel, g, phi_g, p_embed, seed, idx)
