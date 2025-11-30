@@ -78,28 +78,35 @@ end
 """
     generate_matrix(g::AbstractGraph, embedding::Embedding)
 
-Generates the symmetric tensor matrix M and the column mapping phi using Nemo.
-M is a Nemo matrix over GF(P).
-phi is a list of edges corresponding to columns, sorted lexicographically.
+Generates the symmetric tensor matrix M for the COMPLETE GRAPH K_n.
+Also identifies which columns correspond to the edges of the input graph g.
+
+Returns:
+    M: Nemo matrix over GF(P) for K_n (size: row_dim x n*(n-1)/2)
+    phi: Vector{Edge} mapping column indices to edges of K_n
+    indices_g: Vector{Int} indices of columns corresponding to edges in g
 """
 function generate_matrix(g::AbstractGraph, embedding::Embedding)
     n, t = size(embedding)
 
-    # Enforce the universal rule:
-    # Edges must be sorted lexicographically by (src, dst) with src < dst.
-    edges_list = collect(edges(g))
-    sort!(edges_list, by=e -> (src(e), dst(e)))
+    # Prepare lookup set for g's edges (normalized u < v)
+    g_edges_set = Set{Edge}()
+    for e in edges(g)
+        u, v = src(e), dst(e)
+        push!(g_edges_set, Edge(min(u, v), max(u, v)))
+    end
 
-    m = length(edges_list)
+    # Number of edges in K_n
+    m_Kn = (n * (n - 1)) ÷ 2
     row_dim = (t * (t + 1)) ÷ 2
 
-    # Initialize Nemo Matrix over Finite Field Fp (defined in Types.jl)
+    # Initialize Nemo Matrix over Finite Field Fp
     Fp = get_Fp()
-    M = zero_matrix(Fp, row_dim, m)
-    phi = Vector{Edge}(undef, m)
+    M = zero_matrix(Fp, row_dim, m_Kn)
+    phi = Vector{Edge}(undef, m_Kn)
+    indices_g = Int[] # Indices corresponding to g
 
     # Precompute indices for symmetric tensor elements
-    # Order: (1,1), (1,2), ..., (1,t), (2,2), ..., (t,t)
     idx_map = Tuple{Int,Int}[]
     for r in 1:t
         for c in r:t
@@ -107,25 +114,32 @@ function generate_matrix(g::AbstractGraph, embedding::Embedding)
         end
     end
 
-    for (k, e) in enumerate(edges_list)
-        u, v = src(e), dst(e)
-        phi[k] = e
+    # Iterate over ALL pairs (u, v) in lexicographical order (edges of K_n)
+    col_idx = 0
+    for u in 1:(n-1)
+        for v in (u+1):n
+            col_idx += 1
+            e_Kn = Edge(u, v)
+            phi[col_idx] = e_Kn
 
-        # embedding is Matrix{Int}
-        pu_row = embedding[u, :]
-        pv_row = embedding[v, :]
+            # If this edge is in g, store the index
+            if e_Kn in g_edges_set
+                push!(indices_g, col_idx)
+            end
 
-        # Calculate Symmetric Tensor Vector (STV) elements
-        for (row_idx, (i, j)) in enumerate(idx_map)
-            # Calculate in Int first (using widemul for safety before modulo)
-            val_int = (widemul(pu_row[i], pv_row[j]) + widemul(pv_row[i], pu_row[j])) % P_VAL
+            # --- Calculate STV column for edge (u, v) ---
+            pu_row = embedding[u, :]
+            pv_row = embedding[v, :]
 
-            # Assign to Nemo matrix (automatically converts Int to Fp element)
-            M[row_idx, k] = Fp(Int(val_int))
+            for (row_idx, (i, j)) in enumerate(idx_map)
+                # val = p_u[i]*p_v[j] + p_v[i]*p_u[j]
+                val_int = (widemul(pu_row[i], pv_row[j]) + widemul(pv_row[i], pu_row[j])) % P_VAL
+                M[row_idx, col_idx] = Fp(Int(val_int))
+            end
         end
     end
 
-    return M, phi
+    return M, phi, indices_g
 end
 
 """

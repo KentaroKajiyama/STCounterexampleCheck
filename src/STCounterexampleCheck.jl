@@ -1,7 +1,7 @@
 module STCounterexampleCheck
 
 # エントリーポイント関数をエクスポート
-export run_job, run_batch_job
+export run_job, run_batch_job, debug_check_rank
 
 # ==============================================================================
 # Include Submodules
@@ -21,6 +21,7 @@ using .Matroid
 using .ClassCheck
 using .Output
 using .Main 
+using Graphs
 
 # ==============================================================================
 # Single Job Entry Point
@@ -147,6 +148,136 @@ function run_batch_job(;
     println("\n==========================================")
     println("   Batch Job Finished")
     println("==========================================")
+end
+
+
+"""
+指定されたファイルのグラフに対してランク計算を行い、詳細を標準出力する関数
+args:
+    input_file: グラフファイルのパス
+    target_seed: 特定のシードで試したい場合は数値を指定。Nothingならランダムに試行。
+"""
+
+# 定数設定 (探索プログラムと同じ値にしてください)
+const T_DIM = 6  # 例
+const MAX_EDGES = 100 # 例
+
+function debug_check_rank(input_file::String; target_seed::Union{Int, UInt64, Nothing}=nothing)
+    # 1. グラフの読み込み
+    graphs = read_graphs_from_file(input_file)
+    println("Loaded $(length(graphs)) graphs from $input_file")
+
+    for (i, g) in enumerate(graphs)
+        println("\n" * "="^60)
+        println("Checking Graph #$i")
+        println("Vertices (n): $(nv(g))")
+        println("Edges (m):    $(ne(g))")
+        println("Edge List:    $(edges(g))")
+
+        # 制約チェック
+        valid, reason = check_graph_constraints(g, MAX_EDGES, 0, 5)
+        if !valid
+            println("Skipping: Constraints check failed ($reason)")
+            continue
+        end
+
+        n = nv(g)
+        
+        # 試行するシードを決める
+        # target_seed があればそれ1回、なければランダムに5回試す
+        seeds_to_try = isnothing(target_seed) ? [rand(Int64) for _ in 1:5] : [target_seed]
+
+        for seed in seeds_to_try
+            println("\n" * "-"^40)
+            println("Trial with Seed: $seed")
+
+            # 2. 埋め込み生成
+            # generate_embedding が内部で rand() を呼んでいれば、上の seed! が効きます
+            p_embed, used_seed = generate_embedding(n, T_DIM, seed)
+            
+            # 念のため、返ってきたシードも確認（generate_embeddingの実装依存）
+            # println("Debug: seed returned from function: $used_seed")
+
+            # 1. K_n 全体の行列と、Gに対応するインデックスを取得
+            M_all, phi_all, indices_g = generate_matrix(g, p_embed)
+            
+            # 2. G に対応する部分行列だけを切り出す
+            M_g = M_all[:, indices_g]
+            phi_g = phi_all[indices_g] # G の辺リスト (lex順)
+
+            println("\n[generate_matrix]")
+            println("  phi_all: $phi_all")
+            println("  indices_g: $indices_g")
+            println("  phi_g: $phi_g")
+
+            # 4. ランク計算
+            r = compute_rank(M_g)
+
+            # 5. 結果出力
+            println("Matrix Size:   $(size(M_g))")
+            println("Computed Rank: $r")
+            
+            # 期待値との比較（サーキットなら |E|-1, 独立なら |E|）
+            if r == ne(g)
+                println("Status: Independent (Full Rank)")
+            elseif r == ne(g) - 1
+                println("Status: Circuit candidate (|E|-1)")
+            else
+                println("Status: Dependent (Deficiency: $(ne(g) - r))")
+            end
+
+            C_indices = find_circuit(M_all, indices_g)
+            C_edges = phi_all[C_indices]
+
+            println("\n[Circuit Analysis]")
+            println("  Circuit Size (Edges): $(length(C_edges))")
+            println("  Circuit Indices:      $C_indices")
+            println("  phi length:           $(length(phi_g))")
+            if length(C_edges) > 0
+                # エッジリストを整形して表示
+                edge_strs = ["($(src(e)), $(dst(e)))" for e in C_edges]
+                println("  Circuit Edges:        $(join(edge_strs, ", "))")
+            else
+                println("  (No circuit found or graph is independent)")
+            end
+
+            # --- 閉包探索結果の出力 ---
+            F_indices = find_closure(g, M_all, C_indices)
+
+            F_edges = phi_all[F_indices]
+            
+            println("\n[Closure Analysis]")
+            println("  Closure Size (Edges): $(length(F_edges))")
+            println("  Closure Indices:      $F_indices")
+            
+            # 閉包内の辺リスト
+            if length(F_edges) > 0
+                edge_strs_F = ["($(src(e)), $(dst(e)))" for e in F_edges]
+                # 長すぎる場合は省略表示
+                if length(edge_strs_F) > 20
+                    println("  Closure Edges:        $(join(edge_strs_F[1:20], ", "))... (total $(length(F_edges)))")
+                else
+                    println("  Closure Edges:        $(join(edge_strs_F, ", "))")
+                end
+            end
+
+            # 閉包グラフの作成 (可視化や分析用)
+            F_graph = SimpleGraph(n)
+            for e in F_edges
+                add_edge!(F_graph, src(e), dst(e))
+            end
+            println("  Closure Graph (Vertices): $(nv(F_graph)), Edges: $(ne(F_graph))")
+
+            # ★ 行列 M の中身を表示 (サイズが大きい場合は一部のみ)
+            println("\nMatrix M content:")
+            if size(M_g, 1) <= 20 && size(M_g, 2) <= 20
+                display(M_g) # Julia の標準的な行列表示
+            else
+                println("(Matrix is too large to display fully. Showing top-left 5x5)")
+                display(M_g[1:min(5, end), 1:min(5, end)])
+            end
+        end
+    end
 end
 
 end # module

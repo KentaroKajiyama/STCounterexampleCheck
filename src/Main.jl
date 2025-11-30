@@ -29,6 +29,9 @@ end
 
 get_min_deg() = parse(Int, get(ENV, "MIN_DEG", "0"))
 get_max_deg() = parse(Int, get(ENV, "MAX_DEG", "1000"))
+# 並列数を制御するための設定 (デフォルトはCPUスレッド数の半分、またはメモリに合わせて調整)
+# メモリ不足の場合は .env で MAX_WORKERS=1 や 2 に設定してください。
+get_max_workers() = parse(Int, get(ENV, "MAX_WORKERS", string(max(1, Threads.nthreads() ÷ 2))))
 
 """
     core_main(g::AbstractGraph, channel::Channel)
@@ -44,20 +47,30 @@ function core_main(g::AbstractGraph, channel::Channel)
 
   n = nv(g)
   p_embed, seed = generate_embedding(n, T_DIM)
-  M, phi = generate_matrix(g, p_embed)
-  r = compute_rank(M)
+  # 1. K_n 全体の行列と、Gに対応するインデックスを取得
+  M_all, phi_all, indices_g = generate_matrix(g, p_embed)
+  
+  # 2. G に対応する部分行列だけを切り出す
+  M_g = M_all[:, indices_g]
+  phi_g = phi_all[indices_g] # G の辺リスト (lex順)
 
-  if r == size(M, 2)
-    output_independent(channel, g, phi, p_embed, seed)
+  # 3. G のランクを計算
+  r = compute_rank(M_g)
+
+  if r == size(M_g, 2)
+    output_independent(channel, g, phi_g, p_embed, seed)
   else
-    C_edges, C_indices = find_circuit(g, M, phi)
+    C_indices = find_circuit(M_all, indices_g)
+    C_edges = phi_all[C_indices]
 
     if isempty(C_edges)
       output_exception(channel, g, "Rank < cols but no circuit found (numerical error?)")
       return
     end
 
-    F_edges, F_indices = find_closure(g, M, C_indices, phi)
+    F_indices = find_closure(g, M_all, C_indices)
+
+    F_edges = phi_all[F_indices]
 
     F_graph = SimpleGraph(n)
     for e in F_edges
@@ -100,14 +113,17 @@ function double_circuit_main(g::AbstractGraph, channel::Channel)
     t = 5 # Fixed for this task
 
     p_embed, seed = generate_embedding(n, t)
-    M, phi = generate_matrix(g, p_embed) # phi matches column indices
+    M_all, phi_all, indices_g = generate_matrix(g, p_embed) # phi matches column indices
     
     m = ne(g)
+    # 2. G に対応する部分行列だけを切り出す
+    M_g = M_all[:, indices_g]
+    phi_g = phi_all[indices_g] # G の辺リスト (lex順)
     
     # (ii) Rank Check: rank(G) must be |G| - 2
-    r_G = compute_rank(M)
+    r_G = compute_rank(M_g)
     if r_G != m - 2
-        output_not_double_circuit(channel, g, phi, p_embed, seed)
+        output_not_double_circuit(channel, g, phi_g, p_embed, seed)
         return
     end
     
@@ -124,7 +140,7 @@ function double_circuit_main(g::AbstractGraph, channel::Channel)
         # Using Nemo's matrix subset logic
         # Indices excluding k
         subset_indices = [i for i in 1:m if i != k]
-        subM = M[:, subset_indices]
+        subM = M_g[:, subset_indices]
         
         r_sub = compute_rank(subM)
         
@@ -141,12 +157,12 @@ function double_circuit_main(g::AbstractGraph, channel::Channel)
         idx = identify_C_n5_index(g, n)
         
         if idx > 0
-            output_double_circuit(channel, g, phi, p_embed, seed, idx)
+            output_double_circuit(channel, g, phi_g, p_embed, seed, idx)
         else
-            output_double_circuit_counterexample(channel, g, phi, p_embed, seed)
+            output_double_circuit_counterexample(channel, g, phi_g, p_embed, seed)
         end
     else
-        output_not_double_circuit(channel, g, phi, p_embed, seed)
+        output_not_double_circuit(channel, g, phi_g, p_embed, seed)
     end
 end
 
@@ -280,26 +296,42 @@ Process a list of graphs in parallel using Producer-Consumer pattern.
 function workflow(graphs::Vector)
   output_dir = get(ENV, "OUTPUT_DIR", ".")
   output_path_name = get(ENV, "OUTPUT_PATH_NAME", "output")
+  n_workers = get_max_workers() # 並列数を取得
   if !isdir(output_dir)
     mkdir(output_dir)
   end
 
-  channel = Channel{Any}(1000) # Buffer size 1000
+  result_channel = Channel{Any}(1000) # Buffer size 1000
 
+  # Input Channel (Job Queue)
+  input_channel = Channel{Any}(length(graphs))
+  for g in graphs
+      put!(input_channel, g)
+  end
+  close(input_channel) # 入力受付終了
   # Spawn consumer
-  consumer = @async writer_task_standard(channel, output_dir, output_path_name)
+  consumer = @async writer_task_standard(result_channel, output_dir, output_path_name)
 
-  # Spawn producers
-  @threads for g in graphs
-    try
-      core_main(g, channel)
-    catch e
-      output_exception(channel, g, "Runtime error: $e")
-    end
+  # Start Workers (Worker Pool Pattern)
+  # n_workers の数だけタスクを起動し、それらが input_channel を取り合います。
+  # これにより、同時に走る core_main の数を厳密に n_workers に制限します。
+  @sync begin
+      for w in 1:n_workers
+          Threads.@spawn begin
+              for g in input_channel
+                  try
+                      core_main(g, result_channel)
+                  catch e
+                      # bt = catch_backtrace()
+                      output_exception(result_channel, g, "Runtime error: $e")
+                  end
+              end
+          end
+      end
   end
 
   # Close channel when done
-  close(channel)
+  close(result_channel)
 
   # Wait for consumer to finish
   wait(consumer)
@@ -312,20 +344,34 @@ end
 function workflow_double_circuit(graphs::Vector)
     output_dir = get(ENV, "OUTPUT_DIR", ".")
     output_path_name = get(ENV, "OUTPUT_PATH_NAME", "output")
+    n_workers = get_max_workers() # 並列数を取得
     if !isdir(output_dir); mkpath(output_dir); end
     println("Starting Double Circuit Workflow (t=5). Output: $output_dir")
 
-    channel = Channel{Any}(2000)
-    consumer = @async writer_task_double_circuit(channel, output_dir, output_path_name)
-
-    @threads for g in graphs
-        try
-            double_circuit_main(g, channel)
-        catch e
-            output_exception(channel, g, "Error in DC: $e")
-        end
+    result_channel = Channel{Any}(2000)
+    # Input Channel (Job Queue)
+    input_channel = Channel{Any}(length(graphs))
+    for g in graphs
+        put!(input_channel, g)
     end
-    close(channel)
+    close(input_channel) # 入力受付終了
+    consumer = @async writer_task_double_circuit(result_channel, output_dir, output_path_name)
+
+    @sync begin
+      for w in 1:n_workers
+          Threads.@spawn begin
+              for g in input_channel
+                  try
+                      double_circuit_main(g, result_channel)
+                  catch e
+                      # bt = catch_backtrace()
+                      output_exception(result_channel, g, "Runtime error: $e")
+                  end
+              end
+          end
+      end
+  end
+    close(result_channel)
     wait(consumer)
     println("Double Circuit Workflow completed.")
 end
