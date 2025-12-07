@@ -1,25 +1,28 @@
-# Connected graphs
-for ($i = 1; $i -le 18; $i++) {
+# # Connected graphs
+# for ($i = 15; $i -le 18; $i++) {
     
-    $name = "connected_$i"
-    Write-Host "Processing $name..."
-    if ($i -in 16, 17, 18) {
-        $max_part = if ($i -eq 16) {10} elseif ($i -eq 17) {50} else {300}
-        for ($j = 1; $j -le $max_part; $j++) {
-            $name = "connected_${i}_part$j"
-            julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/1_output $name standard
-            if ($i -eq 16) {
-                julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/2_output $name double_circuit
-            }
-        }
-    } else {
-        julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/1_output $name standard
-        julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/2_output $name double_circuit
-    }
-}
+#     $name = "connected_$i"
+#     Write-Host "Processing $name..."
+#     if ($i -in 16, 17, 18) {
+#         $max_part = if ($i -eq 16) {10} elseif ($i -eq 17) {50} else {300}
+#         for ($j = 1; $j -le $max_part; $j++) {
+#             if ($i -in 2,3,4) {
+#                 continue
+#             }
+#             $name = "connected_${i}_part$j"
+#             julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/1_output $name standard
+#             if ($i -eq 16) {
+#                 julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/2_output $name double_circuit
+#             }
+#         }
+#     } else {
+#         julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/1_output $name standard
+#         julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/2_output $name double_circuit
+#     }
+# }
 
 # Disconnected graphs
-for ($i = 1; $i -le 18; $i++) {
+for ($i = 18; $i -le 18; $i++) {
     $name = "disconnected_$i"
     Write-Host "Processing $name..."
     if ($i -in 15, 16) {
@@ -35,7 +38,7 @@ for ($i = 1; $i -le 18; $i++) {
             julia --project=. scripts/run_job.jl graphs/1_input/$name.g6 graphs/1_output $name standard
         }
     } elseif ($i -eq 18) {
-        for ($k = 7; $k -le 32; $k++) {
+        for ($k = 18; $k -le 32; $k++) {
             if ($k -ge 12 -and $k -le 20) {
                 $max_part = if ($k -in 12,13,18,19,20) {10} else {30}
                 for ($j = 1; $j -le $max_part; $j++) {

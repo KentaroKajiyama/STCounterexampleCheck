@@ -80,9 +80,9 @@ function core_main(g::AbstractGraph, channel::Channel)
     idx = identify_C_n6_index(F_graph, n)
 
     if idx > 0
-      output_dependent(channel, g, phi, p_embed, seed, C_edges, F_edges, idx, C_indices, F_indices)
+      output_dependent(channel, g, phi_all, p_embed, seed, C_edges, F_edges, idx, C_indices, F_indices)
     else
-      output_counterexample(channel, g, phi, p_embed, seed, C_edges, F_edges, C_indices, F_indices)
+      output_counterexample(channel, g, phi_all, p_embed, seed, C_edges, F_edges, C_indices, F_indices)
     end
   end
 end
