@@ -1,3 +1,4 @@
 *.g6
 *.bin
 *.jsonl
+.venv
