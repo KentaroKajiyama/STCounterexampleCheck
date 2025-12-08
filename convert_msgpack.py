@@ -52,6 +52,7 @@ def convert_msgpack_to_txt(input_path, output_path):
                     try:
                         g6_bytes = g6_str.encode('utf-8')
                         G = nx.from_graph6_bytes(g6_bytes)
+                        n = G.number_of_nodes()
                         edges = format_edges(list(G.edges()))
                     except Exception as e:
                         print(f"Warning: Failed to parse graph6 string '{g6_str}' (Type {version}). Skipping. Error: {e}")
@@ -60,9 +61,9 @@ def convert_msgpack_to_txt(input_path, output_path):
                     # タイプごとのデータ展開とフォーマット
                     if version == 0:  # IndependentResult: [0, g6, seed]
                         # C_indices, F_indices, Class_index は空欄/デフォルト値
-                        c_indices = ""
-                        f_indices = ""
-                        class_index = ""
+                        c_indices = "0"
+                        f_indices = "0"
+                        class_index = "0"
                         
                         # データ要素数が3であることを確認
                         if len(record) != 3:
@@ -81,9 +82,9 @@ def convert_msgpack_to_txt(input_path, output_path):
                     elif version == 2:  # ForbiddenGraphResult: [2, g6, seed]
                         # C_indices, F_indices, Class_index は空欄/デフォルト値
                         # seedは通常1だが、元のデータ構造を尊重
-                        c_indices = ""
-                        f_indices = ""
-                        class_index = ""
+                        c_indices = "0"
+                        f_indices = "0"
+                        class_index = "0"
                         
                         # データ要素数が3であることを確認
                         if len(record) != 3:
@@ -98,6 +99,7 @@ def convert_msgpack_to_txt(input_path, output_path):
                     line_parts = [
                         str(version),
                         str(seed),
+                        str(n),
                         c_indices,
                         f_indices,
                         class_index,
