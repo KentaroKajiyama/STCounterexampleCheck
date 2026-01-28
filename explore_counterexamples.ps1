@@ -16,3 +16,17 @@ if ($nonEmptyFiles) {
 else {
     Write-Host "全て空（もしくは対象ファイルが存在しません）。" -ForegroundColor Yellow
 }
+
+# 2. 空のファイルを抽出して削除
+$emptyFiles = $files | Where-Object { $_.Length -eq 0 }
+
+if ($emptyFiles) {
+    Write-Host "`n--- 以下の空ファイルを削除します ---" -ForegroundColor Red
+    foreach ($file in $emptyFiles) {
+        Write-Host "Deleting: $($file.FullName)"
+        Remove-Item -Path $file.FullName -Force
+    }
+    Write-Host "削除が完了しました。" -ForegroundColor Cyan
+} else {
+    Write-Host "`n削除対象の空ファイルはありませんでした。" -ForegroundColor Gray
+}

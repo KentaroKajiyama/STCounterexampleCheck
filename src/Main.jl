@@ -190,13 +190,13 @@ end
 """
 function writer_task_binary(channel::Channel, output_dir::String, output_path_name::String)
   # 拡張子を .dat に変更（C++で読むバイナリデータであることを明示）
-  dat_path = joinpath(output_dir, string(output_path_name, "_independent.dat"))
-  dep_path = joinpath(output_dir, string(output_path_name, "_dependent.dat"))
-  for_path = joinpath(output_dir, string(output_path_name, "_forbidden.dat"))
+  dat_path = joinpath(output_dir, "/independent/", string(output_path_name, "_independent.dat"))
+  dep_path = joinpath(output_dir, "/dependent/", string(output_path_name, "_dependent.dat"))
+  for_path = joinpath(output_dir, "/forbidden/", string(output_path_name, "_forbidden.dat"))
   
   # JSONL形式のファイルは、人間が確認する用としてそのまま残すか、不要なら削除してもOKです
-  counter_path = joinpath(output_dir, string(output_path_name, "_counterexample.jsonl"))
-  exception_path = joinpath(output_dir, string(output_path_name, "_exception.jsonl"))
+  counter_path = joinpath(output_dir, "/counterexample/", string(output_path_name, "_counterexample.jsonl"))
+  exception_path = joinpath(output_dir, "/exception/", string(output_path_name, "_exception.jsonl"))
 
   open(dat_path, "w") do dat_io
     open(dep_path, "w") do dep_io
@@ -348,7 +348,7 @@ function workflow(graphs::Vector)
   end
   close(input_channel) # 入力受付終了
   # Spawn consumer
-  consumer = @async writer_task_standard(result_channel, output_dir, output_path_name)
+  consumer = @async writer_task_binary(result_channel, output_dir, output_path_name)
 
   # Start Workers (Worker Pool Pattern)
   # n_workers の数だけタスクを起動し、それらが input_channel を取り合います。
