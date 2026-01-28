@@ -3,3 +3,5 @@
 *.jsonl
 .venv
 *.txt
+*.png
+*.svg

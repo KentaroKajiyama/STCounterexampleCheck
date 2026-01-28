@@ -173,68 +173,99 @@ function double_circuit_main(g::AbstractGraph, channel::Channel)
     end
 end
 
-"""
-    writer_task(channel::Channel, output_dir::String)
+# ヘルパー関数: 可変長データ（文字列や配列）を [長さ(Int16)][データ本体] の順で書き込む
+# これにより、C++側で「まず長さを読んで、その分だけmalloc/readする」ことが可能になります
+function write_var_data(io::IO, data::Union{String, Vector})
+    # 長さがInt16の範囲(32767)を超えない前提。超える可能性がある場合はInt32に変更してください。
+    len = Int16(length(data)) 
+    write(io, len)      # 長さを書き込む
+    write(io, data)     # データ本体を書き込む
+end
 
-Consumer task that writes results to files.
 """
-function writer_task_standard(channel::Channel, output_dir::String, output_path_name::String)
-  bin_path = joinpath(output_dir, string(output_path_name, "_output.bin"))
+    writer_task_binary(channel::Channel, output_dir::String, output_path_name::String)
+
+    C/C++ で処理しやすいカスタムバイナリ形式でストリーム書き込みを行うタスク。
+    MsgPackを使用せず、標準の write 関数を使用します。
+"""
+function writer_task_binary(channel::Channel, output_dir::String, output_path_name::String)
+  # 拡張子を .dat に変更（C++で読むバイナリデータであることを明示）
+  dat_path = joinpath(output_dir, string(output_path_name, "_independent.dat"))
+  dep_path = joinpath(output_dir, string(output_path_name, "_dependent.dat"))
+  for_path = joinpath(output_dir, string(output_path_name, "_forbidden.dat"))
+  
+  # JSONL形式のファイルは、人間が確認する用としてそのまま残すか、不要なら削除してもOKです
   counter_path = joinpath(output_dir, string(output_path_name, "_counterexample.jsonl"))
   exception_path = joinpath(output_dir, string(output_path_name, "_exception.jsonl"))
 
-  open(bin_path, "w") do bin_io
-    open(counter_path, "w") do counter_io
-      open(exception_path, "w") do exception_io
-        for result in channel
-          if result isa IndependentResult
-            # [0, g6, seed]
-            g6 = to_graph6(result.g)
-            data = [0, g6, result.seed]
-            write(bin_io, MsgPack.pack(data))
+  open(dat_path, "w") do dat_io
+    open(dep_path, "w") do dep_io
+      open(for_path, "w") do for_io
+        open(counter_path, "w") do counter_io
+          open(exception_path, "w") do exception_io
+            
+            # 【ストリーム処理の核】
+            # Channelから結果が来るたびにループが回り、即座にバイナリ書き込みが行われます。
+            for result in channel
+              
+              if result isa IndependentResult
+                # --- Type 0: Independent ---
+                write(dat_io, UInt8(0))           # Type ID (1 byte)
+                write(dat_io, UInt64(result.seed))# Seed (8 bytes)
+                
+                g6 = to_graph6(result.g)
+                write_var_data(dat_io, g6)        # Graph6 String (Length + Bytes)
 
-          elseif result isa DependentResult
-            # [1, g6, seed, circuit_idx, closure_idx, family_idx]
-            g6 = to_graph6(result.g)
-            data = [1, g6, result.seed, result.C_indices, result.F_indices, result.class_index]
-            write(bin_io, MsgPack.pack(data))
+              elseif result isa DependentResult
+                # --- Type 1: Dependent ---
+                write(dep_io, UInt8(1))           # Type ID
+                write(dep_io, UInt64(result.seed))# Seed
+                
+                g6 = to_graph6(result.g)
+                write_var_data(dep_io, g6)        # Graph6 String
 
-          elseif result isa ForbiddenGraphResult
-            # [2, g6, seed]
-            g6 = to_graph6(result.g)
-            data = [2, g6, 1]
-            write(bin_io, MsgPack.pack(data))
+                # 追加データ: クラスID, Circuit, Closure
+                write(dep_io, Int32(result.class_index))   # Class Index (4 bytes)
+                write_var_data(dep_io, result.C_indices)   # Circuit Indices (Vector{Int64})
 
-          elseif result isa CounterexampleResult
-            # JSONL
-            g6 = to_graph6(result.g)
-            data = Dict(
-              "type" => "counterexample",
-              "g6" => g6,
-              "seed" => result.seed,
-              "G" => Dict("vertices" => nv(result.g), "edges" => [[src(e), dst(e)] for e in edges(result.g)]),
-              "circuit_indices" => result.C_indices,
-              "closure_indices" => result.F_indices
-            )
-            println(counter_io, JSON.json(data))
+              elseif result isa ForbiddenGraphResult
+                # --- Type 2: Forbidden ---
+                write(for_io, UInt8(2))           # Type ID
+                write(for_io, UInt64(0))          # Dummy Seed (または実際のSeedがあれば)
+                
+                g6 = to_graph6(result.g)
+                write_var_data(for_io, g6)
 
-          elseif result isa ExceptionResult
-            # JSONL
-            g6 = to_graph6(result.g)
-            data = Dict(
-              "type" => "exception",
-              "g6" => g6,
-              "G" => Dict("vertices" => nv(result.g), "edges" => [[src(e), dst(e)] for e in edges(result.g)]),
-              "message" => result.message
-            )
-            println(exception_io, JSON.json(data))
+              # Counterexample や Exception は JSONL (テキスト) の方が読みやすいため、
+              # 既存のままテキストファイルへ書き出します（バイナリに混ぜると扱いが面倒になるため）
+              elseif result isa CounterexampleResult
+                # ... (既存のJSON出力処理) ...
+                g6 = to_graph6(result.g)
+                data = Dict(
+                  "type" => "counterexample",
+                  "g6" => g6,
+                  "seed" => result.seed,
+                  "G" => Dict("vertices" => nv(result.g), "edges" => [[src(e), dst(e)] for e in edges(result.g)]),
+                  "circuit_indices" => result.C_indices,
+                  "closure_indices" => result.F_indices
+                )
+                println(counter_io, JSON.json(data))
+
+              elseif result isa ExceptionResult
+                # ... (既存のJSON出力処理) ...
+                g6 = to_graph6(result.g)
+                data = Dict("type" => "exception", "g6" => g6, "message" => result.message)
+                println(exception_io, JSON.json(data))
+              end
+            end
+            
+            # ここで1件分の処理完了。次のデータがChannelに来るまで待機、または次を処理。
           end
         end
       end
     end
   end
 end
-
 """
     writer_task_double_circuit(channel::Channel, output_dir::String, output_path_name::String)
 
