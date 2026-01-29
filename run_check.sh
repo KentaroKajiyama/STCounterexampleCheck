@@ -4,7 +4,7 @@ echo "--- 主張 5 の反例判定を開始します ---"
 
 START_PART=0
 MAX_PART=199
-EDGE_NUM=20
+EDGE_NUM=21
 
 mkdir -p outputs/claim5/certification/44440
 mkdir -p outputs/claim5/certification/44440/independent
