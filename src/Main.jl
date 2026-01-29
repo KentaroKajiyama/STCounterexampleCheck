@@ -39,10 +39,23 @@ get_max_workers() = parse(Int, get(ENV, "MAX_WORKERS", string(max(1, Threads.nth
 Main logic for a single graph. Pushes results to channel.
 """
 function core_main(g::AbstractGraph, channel::Channel)
+  # 1. 次数 0 の孤立点を特定して削除
+  active_vertices = [v for v in vertices(g) if degree(g, v) > 0]
+  # 全ての頂点の次数が 0 の場合や、孤立点が存在する場合にグラフを再構築
+  if length(active_vertices) < nv(g)
+      # 辺が一つもない場合のハンドリング（必要に応じて）
+      if isempty(active_vertices)
+          # グラフが空、または全頂点が孤立点の場合の処理
+          # ここでは何もしないか、あるいは return するなどの設計判断が必要
+          println("Graph has no edges, skipping.")
+          return 
+      end
+      g, _ = induced_subgraph(g, active_vertices)
+  end
   valid, reason = check_graph_constraints(g, MAX_EDGES, get_min_deg(), get_max_deg())
   if !valid
     output_forbidden_graph(channel, g)
-    println("Forbidden graph: $reason, graph6: $(graph6(g))")
+    println("Forbidden graph: $reason, graph6: $(to_graph6(g))")
     return
   end
 
