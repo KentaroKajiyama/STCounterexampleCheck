@@ -28,7 +28,7 @@ function __init__()
 end
 
 get_min_deg() = parse(Int, get(ENV, "MIN_DEG", "0"))
-get_max_deg() = parse(Int, get(ENV, "MAX_DEG", "1000"))
+get_max_deg() = parse(Int, get(ENV, "MAX_DEG", "4"))
 # 並列数を制御するための設定 (デフォルトはCPUスレッド数の半分、またはメモリに合わせて調整)
 # メモリ不足の場合は .env で MAX_WORKERS=1 や 2 に設定してください。
 get_max_workers() = parse(Int, get(ENV, "MAX_WORKERS", string(max(1, Threads.nthreads() ÷ 2))))
@@ -42,6 +42,7 @@ function core_main(g::AbstractGraph, channel::Channel)
   valid, reason = check_graph_constraints(g, MAX_EDGES, get_min_deg(), get_max_deg())
   if !valid
     output_forbidden_graph(channel, g)
+    println("Forbidden graph: $reason, graph6: $(graph6(g))")
     return
   end
 
@@ -56,9 +57,9 @@ function core_main(g::AbstractGraph, channel::Channel)
 
   # 3. G のランクを計算
   r = compute_rank(M_g)
-
+  
   if r == size(M_g, 2)
-    output_independent(channel, g, phi_g, p_embed, seed)
+    output_independent(channel, g, seed)
   else
     C_indices = find_circuit(M_all, indices_g)
     C_edges = phi_all[C_indices]
@@ -80,7 +81,7 @@ function core_main(g::AbstractGraph, channel::Channel)
     idx = identify_C_n6_index(F_graph, n)
 
     if idx > 0
-      output_dependent(channel, g, phi_all, p_embed, seed, C_edges, F_edges, idx, C_indices, F_indices)
+      output_dependent(channel, g, seed, idx, C_indices)
     else
       output_counterexample(channel, g, phi_all, p_embed, seed, C_edges, F_edges, C_indices, F_indices)
     end
@@ -190,13 +191,13 @@ end
 """
 function writer_task_binary(channel::Channel, output_dir::String, output_path_name::String)
   # 拡張子を .dat に変更（C++で読むバイナリデータであることを明示）
-  dat_path = joinpath(output_dir, "/independent/", string(output_path_name, "_independent.dat"))
-  dep_path = joinpath(output_dir, "/dependent/", string(output_path_name, "_dependent.dat"))
-  for_path = joinpath(output_dir, "/forbidden/", string(output_path_name, "_forbidden.dat"))
+  dat_path = joinpath(output_dir, "independent", string(output_path_name, "_independent.dat"))
+  dep_path = joinpath(output_dir, "dependent", string(output_path_name, "_dependent.dat"))
+  for_path = joinpath(output_dir, "forbidden", string(output_path_name, "_forbidden.dat"))
   
   # JSONL形式のファイルは、人間が確認する用としてそのまま残すか、不要なら削除してもOKです
-  counter_path = joinpath(output_dir, "/counterexample/", string(output_path_name, "_counterexample.jsonl"))
-  exception_path = joinpath(output_dir, "/exception/", string(output_path_name, "_exception.jsonl"))
+  counter_path = joinpath(output_dir, "counterexample", string(output_path_name, "_counterexample.jsonl"))
+  exception_path = joinpath(output_dir, "exception", string(output_path_name, "_exception.jsonl"))
 
   open(dat_path, "w") do dat_io
     open(dep_path, "w") do dep_io

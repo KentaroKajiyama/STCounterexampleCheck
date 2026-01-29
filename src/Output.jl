@@ -14,21 +14,14 @@ using ..GraphUtils
 # Data Structures for Results
 struct IndependentResult
   g::AbstractGraph
-  phi::Vector{Edge}
-  p_embed::Embedding
   seed::Int
 end
 
 struct DependentResult
   g::AbstractGraph
-  phi::Vector{Edge}
-  p_embed::Embedding
   seed::Int
-  C_edges::Vector{Edge}
-  F_edges::Vector{Edge}
   class_index::Int
   C_indices::Vector{Int}
-  F_indices::Vector{Int}
 end
 
 struct CounterexampleResult
@@ -76,12 +69,12 @@ struct DoubleCircuitCounterexampleResult
 end
 
 # Output functions now push to a channel
-function output_independent(channel::Channel, g::AbstractGraph, phi::Vector{Edge}, p_embed::Embedding, seed::Int)
-  put!(channel, IndependentResult(g, phi, p_embed, seed))
+function output_independent(channel::Channel, g::AbstractGraph, seed::Int)
+  put!(channel, IndependentResult(g, seed))
 end
 
-function output_dependent(channel::Channel, g::AbstractGraph, phi::Vector{Edge}, p_embed::Embedding, seed::Int, C_edges::Vector{Edge}, F_edges::Vector{Edge}, class_index::Int, C_indices::Vector{Int}, F_indices::Vector{Int})
-  put!(channel, DependentResult(g, phi, p_embed, seed, C_edges, F_edges, class_index, C_indices, F_indices))
+function output_dependent(channel::Channel, g::AbstractGraph, seed::Int, class_index::Int, C_indices::Vector{Int})
+  put!(channel, DependentResult(g, seed, class_index, C_indices))
 end
 
 function output_counterexample(channel::Channel, g::AbstractGraph, phi::Vector{Edge}, p_embed::Embedding, seed::Int, C_edges::Vector{Edge}, F_edges::Vector{Edge}, C_indices::Vector{Int}, F_indices::Vector{Int})
