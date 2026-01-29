@@ -15,7 +15,7 @@ mkdir -p outputs/claim5/certification/44440/exception
 
 for ((j=START_PART; j<=MAX_PART; j++)); do
     part_name="${EDGE_NUM}_part_${j}"
-    julia --project=. scripts/run_job.jl outputs/claim5/anchored/44440/${part_name}.g6 outputs/claim5/certification/44440 ${part_name} standard
+    julia -t auto --project=. scripts/run_job.jl outputs/claim5/anchored/44440/${part_name}.g6 outputs/claim5/certification/44440 ${part_name} standard
 done
 
 # 検索対象のディレクトリ
