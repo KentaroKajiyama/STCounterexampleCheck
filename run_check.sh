@@ -2,24 +2,24 @@
 
 echo "--- 主張 5 の反例判定を開始します ---"
 
-START_PART=45
+START_PART=0
 MAX_PART=199
-EDGE_NUM=21
+EDGE_NUM=20
 
-mkdir -p outputs/claim5/certification/44440
-mkdir -p outputs/claim5/certification/44440/independent
-mkdir -p outputs/claim5/certification/44440/dependent
-mkdir -p outputs/claim5/certification/44440/forbidden
-mkdir -p outputs/claim5/certification/44440/counterexample
-mkdir -p outputs/claim5/certification/44440/exception
+mkdir -p outputs/claim5/certification/44330
+mkdir -p outputs/claim5/certification/44330/independent
+mkdir -p outputs/claim5/certification/44330/dependent
+mkdir -p outputs/claim5/certification/44330/forbidden
+mkdir -p outputs/claim5/certification/44330/counterexample
+mkdir -p outputs/claim5/certification/44330/exception
 
 for ((j=START_PART; j<=MAX_PART; j++)); do
     part_name="${EDGE_NUM}_part_${j}"
-    julia -t auto --project=. scripts/run_job.jl outputs/claim5/anchored/44440/${part_name}.g6 outputs/claim5/certification/44440 ${part_name} standard_stream
+    julia -t auto --project=. scripts/run_job.jl outputs/claim5/anchored/44330/${part_name}.g6 outputs/claim5/certification/44330 ${part_name} standard_stream
 done
 
 # 検索対象のディレクトリ
-targetDirectory="./outputs/claim5/certification/44440/counterexample"
+targetDirectory="./outputs/claim5/certification/44330/counterexample"
 
 # ディレクトリが存在しない場合の処理
 if [ ! -d "$targetDirectory" ]; then
