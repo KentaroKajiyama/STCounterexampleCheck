@@ -25,7 +25,7 @@ run_job(
     input_file = input_file,
     output_dir = output_dir,
     output_path_name = output_path_name,
-    workflow_type = workflow,
+    workflow_type =workflow,
     
     # 必要に応じてフィルタ設定を変更
     target_edges = "unknown",

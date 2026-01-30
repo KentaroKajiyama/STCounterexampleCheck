@@ -6,6 +6,20 @@ using Graphs
 using GraphIO
 using GraphIO.Graph6
 
+# GraphUtils.jl への追加
+
+"""
+    from_graph6(s::String)
+    
+文字列からグラフをデコードします。
+"""
+function from_graph6(s::AbstractString)
+    # strip(s) で得られた SubString を String() で包んで
+    # 標準的な文字列型に変換してから IOBuffer に渡します
+    s_clean = String(strip(s)) 
+    return GraphIO.Graph6._g6StringToGraph(s_clean)
+end
+
 """
     read_graphs_from_file(path::String)
 

@@ -55,7 +55,15 @@ function run_job(;
     end
 
     println(">> Processing: $input_file (Part ID: $part_id)")
+    println("Workflow type: $workflow_type")
 
+    # 3. ワークフロー実行（ストリーム）
+    if workflow_type == "standard_stream"
+        Main.workflow_stream(input_file, output_dir, output_path_name)
+        return
+    end
+
+    # 4. ワークフロー実行（事前読み込み）
     graphs = GraphUtils.read_graphs_from_file(input_file)
     if isempty(graphs)
         println("   Warning: Skipped (No graphs found)")
@@ -63,7 +71,7 @@ function run_job(;
     end
     println("   Loaded $(length(graphs)) graphs.")
 
-    # 3. ワークフロー実行
+    
     if workflow_type == "standard"
         Main.workflow(graphs)
     elseif workflow_type == "double_circuit"

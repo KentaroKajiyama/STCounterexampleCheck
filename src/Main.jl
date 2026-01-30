@@ -1,6 +1,6 @@
 module Main
 
-export core_main, workflow
+export core_main, workflow, workflow_stream, workflow_double_circuit
 
 using Graphs
 using Base.Threads
@@ -427,5 +427,76 @@ function workflow_double_circuit(graphs::Vector)
     wait(consumer)
     println("Double Circuit Workflow completed.")
 end
+
+
+"""
+    workflow_stream(input_file::String, output_dir::String, output_path_name::String)
+
+Process a list of graphs in parallel using Producer-Consumer pattern.
+"""
+function workflow_stream(input_file::String, output_dir::String, output_path_name::String)
+  n_workers = get_max_workers() # 並列数を取得
+  if !isdir(output_dir)
+    mkdir(output_dir)
+  end
+
+  input_channel = Channel{Any}(1000)
+
+  result_channel = Channel{Any}(1000) # Buffer size 1000
+
+  # 2. プロデューサータスク (非同期)
+  @async begin
+      try
+          # println("Producer: Opening file $input_file") # デバッグ用
+          open(input_file, "r") do io
+              for line in eachline(io)
+                  g_str = strip(line)
+                  if !isempty(g_str)
+                      # ここでエラーが出るとワーカーにデータが届かない
+                      g = GraphUtils.from_graph6(g_str)
+                      put!(input_channel, g)
+                  end
+              end
+          end
+          # println("Producer: Finished loading all graphs.")
+      catch e
+          @error "Producer failed" exception=(e, catch_backtrace())
+      finally
+          close(input_channel) # これをしないとワーカーが永遠に待ち続ける [cite: 70]
+      end
+  end
+
+  # println("Input channel created.")
+
+  # Spawn consumer
+  consumer = @async writer_task_binary(result_channel, output_dir, output_path_name)
+
+  # Start Workers (Worker Pool Pattern)
+  # n_workers の数だけタスクを起動し、それらが input_channel を取り合います。
+  # これにより、同時に走る core_main の数を厳密に n_workers に制限します。
+  @sync begin
+      for w in 1:n_workers
+          # println("Worker $w started.")
+          Threads.@spawn begin
+              for g in input_channel
+                  # println("Processing graph: ", g)
+                  try
+                      core_main(g, result_channel)
+                  catch e
+                      # bt = catch_backtrace()
+                      output_exception(result_channel, g, "Runtime error: $e")
+                  end
+              end
+          end
+      end
+  end
+
+  # Close channel when done
+  close(result_channel)
+
+  # Wait for consumer to finish
+  wait(consumer)
+end
+
 
 end
