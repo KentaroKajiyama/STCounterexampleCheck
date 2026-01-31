@@ -20,12 +20,14 @@ input_file  = ARGS[1]
 output_dir = ARGS[2]
 output_path_name = ARGS[3]
 workflow   = ARGS[4]
+apply_specific_edge_rule = ARGS[5]
 
 run_job(
     input_file = input_file,
     output_dir = output_dir,
     output_path_name = output_path_name,
     workflow_type =workflow,
+    apply_specific_edge_rule = apply_specific_edge_rule,
     
     # 必要に応じてフィルタ設定を変更
     target_edges = "unknown",

@@ -13,6 +13,8 @@ using ..Matroid
 using ..ClassCheck
 using ..Output
 using DotEnv
+# using Plots
+# using GraphRecipes
 
 # Constants/Configuration
 const T_DIM = 6
@@ -38,7 +40,7 @@ get_max_workers() = parse(Int, get(ENV, "MAX_WORKERS", string(max(1, Threads.nth
 
 Main logic for a single graph. Pushes results to channel.
 """
-function core_main(g::AbstractGraph, channel::Channel)
+function core_main(g::AbstractGraph, channel::Channel, apply_specific_edge_rule!::Bool)
   # 1. 次数 0 の孤立点を特定して削除
   active_vertices = [v for v in vertices(g) if degree(g, v) > 0]
   # 全ての頂点の次数が 0 の場合や、孤立点が存在する場合にグラフを再構築
@@ -57,6 +59,16 @@ function core_main(g::AbstractGraph, channel::Channel)
     output_forbidden_graph(channel, g)
     println("Forbidden graph: $reason, graph6: $(to_graph6(g))")
     return
+  end
+
+  # 44331 のケースだけ有効化する
+  if apply_specific_edge_rule!
+    is_valid, reason = GraphUtils.apply_specific_edge_rule!(g)
+    if !is_valid
+      output_forbidden_graph(channel, g)
+      println("Forbidden graph: $reason, graph6: $(to_graph6(g))")
+      return
+    end
   end
 
   n = nv(g)
@@ -434,7 +446,7 @@ end
 
 Process a list of graphs in parallel using Producer-Consumer pattern.
 """
-function workflow_stream(input_file::String, output_dir::String, output_path_name::String)
+function workflow_stream(input_file::String, output_dir::String, output_path_name::String, apply_specific_edge_rule::Bool)
   n_workers = get_max_workers() # 並列数を取得
   if !isdir(output_dir)
     mkdir(output_dir)
@@ -481,7 +493,7 @@ function workflow_stream(input_file::String, output_dir::String, output_path_nam
               for g in input_channel
                   # println("Processing graph: ", g)
                   try
-                      core_main(g, result_channel)
+                      core_main(g, result_channel, apply_specific_edge_rule)
                   catch e
                       # bt = catch_backtrace()
                       output_exception(result_channel, g, "Runtime error: $e")

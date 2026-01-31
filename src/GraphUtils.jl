@@ -20,6 +20,47 @@ function from_graph6(s::AbstractString)
     return GraphIO.Graph6._g6StringToGraph(s_clean)
 end
 
+function enumerate_adjacent_list(g::AbstractGraph)
+    for v in vertices(g)
+        println("Node $v is connected to: ", neighbors(g, v))
+    end
+end
+
+function test_change!(graph)
+    add_edge!(graph, 1, 2)
+end
+
+"""
+特定のルールに基づいてグラフを変形する関数。
+ルール:
+1. ノード 1, 2, 3, 4 が互いに隣接していない。
+2. 次数が Node 1:3, Node 2:3, Node 3:4, Node 4:4 である。
+上記を満たす場合のみ、Node 1-2 間に辺を追加する。
+"""
+function apply_specific_edge_rule!(g::AbstractGraph)
+    # 1. パラメータ設定
+    targets = [1, 2, 3, 4]
+    required_degrees = [3, 3, 4, 4] # ノード 1, 2, 3, 4 に対応
+    
+    # 2. 条件チェック: 相互に接続していないか (Independent Set check)
+    for i in targets, j in targets
+        if i < j && has_edge(g, i, j)
+            return false, "ルール拒否: ノード $i と $j の間に既に辺が存在します。"
+        end
+    end
+    
+    # 3. 条件チェック: 次数が一致するか
+    for (i, v) in enumerate(targets)
+        if degree(g, v) != required_degrees[i]
+            return false, "ルール拒否: ノード $v の次数が $(degree(g, v)) です（期待値: $(required_degrees[i])）。"
+        end
+    end
+    
+    # 4. すべての条件を満たした場合の処理
+    add_edge!(g, 1, 2)
+    return true, ""
+end
+
 """
     read_graphs_from_file(path::String)
 

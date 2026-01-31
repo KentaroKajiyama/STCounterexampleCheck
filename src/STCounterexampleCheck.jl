@@ -36,6 +36,7 @@ function run_job(;
     output_dir::String = "results",
     output_path_name::String = "output",
     workflow_type::String = "standard",
+    apply_specific_edge_rule::Bool = false,
     min_deg::Int = 0,
     max_deg::Int = 1000,
     target_edges::String = "all",
@@ -59,7 +60,7 @@ function run_job(;
 
     # 3. ワークフロー実行（ストリーム）
     if workflow_type == "standard_stream"
-        Main.workflow_stream(input_file, output_dir, output_path_name)
+        Main.workflow_stream(input_file, output_dir, output_path_name, apply_specific_edge_rule)
         return
     end
 
