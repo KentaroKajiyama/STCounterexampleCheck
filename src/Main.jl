@@ -33,7 +33,7 @@ get_min_deg() = parse(Int, get(ENV, "MIN_DEG", "0"))
 get_max_deg() = parse(Int, get(ENV, "MAX_DEG", "4"))
 # 並列数を制御するための設定 (デフォルトはCPUスレッド数の半分、またはメモリに合わせて調整)
 # メモリ不足の場合は .env で MAX_WORKERS=1 や 2 に設定してください。
-get_max_workers() = parse(Int, get(ENV, "MAX_WORKERS", string(max(1, Threads.nthreads() ÷ 2))))
+get_max_workers() = parse(Int, get(ENV, "MAX_WORKERS", string(max(1, Threads.nthreads()))))
 
 """
     core_main(g::AbstractGraph, channel::Channel)
